@@ -1,0 +1,10 @@
+aws_region   = "us-east-1"
+environment  = "development"
+project_name = "cloudcostly"
+
+# Database credentials (use AWS Secrets Manager in production)
+db_username = "postgres"
+db_password = "change-this-password"
+
+# Optional: domain name for production
+domain_name = ""

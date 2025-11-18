@@ -1,0 +1,371 @@
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import ReactFlow, {
+  Node,
+  Edge,
+  addEdge,
+  Background,
+  Controls,
+  MiniMap,
+  Connection,
+  NodeChange,
+  EdgeChange,
+  applyNodeChanges,
+  applyEdgeChanges,
+  Panel
+} from 'reactflow'
+import 'reactflow/dist/style.css'
+import { AWS_SERVICES, AWSService, calculateServiceCost, getServicesByCategory } from '@/lib/awsServices'
+import { architecturesApi } from '@/lib/api'
+import SaveArchitectureDialog from '@/components/SaveArchitectureDialog'
+import { Save, FolderOpen, FileText } from 'lucide-react'
+
+interface ServiceNodeData {
+  service: AWSService
+  config: { [key: string]: any }
+  label: string
+}
+
+export default function ArchitectureDesigner() {
+  const queryClient = useQueryClient()
+  const [nodes, setNodes] = useState<Node<ServiceNodeData>[]>([])
+  const [edges, setEdges] = useState<Edge[]>([])
+  const [selectedNode, setSelectedNode] = useState<Node<ServiceNodeData> | null>(null)
+  const [showServicePalette, setShowServicePalette] = useState(true)
+  const [showSavedList, setShowSavedList] = useState(false)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [currentArchitectureId, setCurrentArchitectureId] = useState<string | null>(null)
+  const [currentArchitectureName, setCurrentArchitectureName] = useState('')
+  const [currentArchitectureDesc, setCurrentArchitectureDesc] = useState('')
+
+  const servicesByCategory = useMemo(() => getServicesByCategory(), [])
+
+  // Calculate total cost of all services in the architecture
+  const totalCost = useMemo(() => {
+    return nodes.reduce((sum, node) => {
+      const service = node.data.service
+      const config = node.data.config
+      return sum + calculateServiceCost(service, config)
+    }, 0)
+  }, [nodes])
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    []
+  )
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    []
+  )
+
+  const onConnect = useCallback(
+    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
+    []
+  )
+
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node<ServiceNodeData>) => {
+    setSelectedNode(node)
+  }, [])
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null)
+  }, [])
+
+  // Add a service to the canvas
+  const addServiceToCanvas = useCallback((service: AWSService) => {
+    const newNode: Node<ServiceNodeData> = {
+      id: `${service.id}-${Date.now()}`,
+      type: 'default',
+      position: { x: 250 + Math.random() * 200, y: 100 + Math.random() * 200 },
+      data: {
+        service,
+        config: service.configurableOptions.reduce((acc, opt) => {
+          acc[opt.id] = opt.default
+          return acc
+        }, {} as { [key: string]: any }),
+        label: service.name
+      },
+      style: {
+        background: service.color,
+        color: '#fff',
+        border: '2px solid #fff',
+        borderRadius: '8px',
+        padding: '10px',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        width: 180
+      }
+    }
+
+    setNodes((nds) => [...nds, newNode])
+  }, [])
+
+  // Update node configuration
+  const updateNodeConfig = useCallback((nodeId: string, configKey: string, value: any) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              config: {
+                ...node.data.config,
+                [configKey]: value
+              }
+            }
+          }
+        }
+        return node
+      })
+    )
+  }, [])
+
+  // Delete selected node
+  const deleteSelectedNode = useCallback(() => {
+    if (selectedNode) {
+      setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id))
+      setEdges((eds) => eds.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id))
+      setSelectedNode(null)
+    }
+  }, [selectedNode])
+
+  // Clear entire canvas
+  const clearCanvas = useCallback(() => {
+    if (window.confirm('Are you sure you want to clear the entire architecture? This cannot be undone.')) {
+      setNodes([])
+      setEdges([])
+      setSelectedNode(null)
+    }
+  }, [])
+
+  // Save architecture to local storage
+  const saveArchitecture = useCallback(() => {
+    const architecture = {
+      nodes,
+      edges,
+      savedAt: new Date().toISOString()
+    }
+    localStorage.setItem('cloudcostly_architecture', JSON.stringify(architecture))
+    alert('Architecture saved successfully!')
+  }, [nodes, edges])
+
+  // Load architecture from local storage
+  const loadArchitecture = useCallback(() => {
+    const saved = localStorage.getItem('cloudcostly_architecture')
+    if (saved) {
+      try {
+        const architecture = JSON.parse(saved)
+        setNodes(architecture.nodes || [])
+        setEdges(architecture.edges || [])
+        setSelectedNode(null)
+        alert('Architecture loaded successfully!')
+      } catch (error) {
+        alert('Error loading architecture')
+        console.error(error)
+      }
+    } else {
+      alert('No saved architecture found')
+    }
+  }, [])
+
+  return (
+    <div className="h-[calc(100vh-4rem)] flex">
+      {/* Service Palette */}
+      <div
+        className={`${
+          showServicePalette ? 'w-64' : 'w-0'
+        } transition-all duration-300 bg-white border-r border-gray-200 overflow-y-auto`}
+      >
+        {showServicePalette && (
+          <div className="p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">AWS Services</h3>
+              <button
+                onClick={() => setShowServicePalette(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {Object.entries(servicesByCategory).map(([category, services]) => (
+              <div key={category} className="mb-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">{category}</h4>
+                <div className="space-y-2">
+                  {services.map((service) => (
+                    <button
+                      key={service.id}
+                      onClick={() => addServiceToCanvas(service)}
+                      className="w-full text-left p-2 rounded border border-gray-200 hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                      style={{ borderLeftColor: service.color, borderLeftWidth: '4px' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{service.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{service.name}</p>
+                          <p className="text-xs text-gray-500">${service.basePrice.toFixed(2)}/mo</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Canvas */}
+      <div className="flex-1 relative">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          fitView
+        >
+          <Background />
+          <Controls />
+          <MiniMap />
+
+          {/* Top Toolbar */}
+          <Panel position="top-left" className="flex gap-2">
+            {!showServicePalette && (
+              <button
+                onClick={() => setShowServicePalette(true)}
+                className="px-3 py-2 bg-white rounded shadow-md text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-200"
+              >
+                Show Services
+              </button>
+            )}
+            <button
+              onClick={saveArchitecture}
+              className="px-3 py-2 bg-white rounded shadow-md text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-200"
+            >
+              💾 Save
+            </button>
+            <button
+              onClick={loadArchitecture}
+              className="px-3 py-2 bg-white rounded shadow-md text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-200"
+            >
+              📂 Load
+            </button>
+            <button
+              onClick={clearCanvas}
+              className="px-3 py-2 bg-white rounded shadow-md text-sm font-medium text-red-700 hover:bg-red-50 border border-red-200"
+            >
+              🗑️ Clear
+            </button>
+          </Panel>
+
+          {/* Cost Display */}
+          <Panel position="top-right" className="bg-white rounded shadow-md p-4 border border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700 mb-1">Estimated Monthly Cost</h3>
+            <p className="text-2xl font-bold text-primary-600">${totalCost.toFixed(2)}</p>
+            <p className="text-xs text-gray-500 mt-1">{nodes.length} service(s)</p>
+          </Panel>
+        </ReactFlow>
+      </div>
+
+      {/* Configuration Panel */}
+      {selectedNode && (
+        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
+          <div className="p-4">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {selectedNode.data.service.icon} {selectedNode.data.service.name}
+                </h3>
+                <p className="text-sm text-gray-500">{selectedNode.data.service.description}</p>
+              </div>
+              <button
+                onClick={deleteSelectedNode}
+                className="text-red-600 hover:text-red-800 text-sm font-medium"
+              >
+                Delete
+              </button>
+            </div>
+
+            {/* Base Price */}
+            <div className="mb-4 p-3 bg-gray-50 rounded">
+              <p className="text-sm text-gray-600">Base Price</p>
+              <p className="text-lg font-semibold text-gray-900">
+                ${selectedNode.data.service.basePrice.toFixed(2)}
+              </p>
+              <p className="text-xs text-gray-500">{selectedNode.data.service.pricingUnit}</p>
+            </div>
+
+            {/* Configuration Options */}
+            {selectedNode.data.service.configurableOptions.length > 0 && (
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Configuration</h4>
+
+                {selectedNode.data.service.configurableOptions.map((option) => (
+                  <div key={option.id}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {option.label}
+                    </label>
+
+                    {option.type === 'number' && (
+                      <input
+                        type="number"
+                        value={selectedNode.data.config[option.id]}
+                        onChange={(e) =>
+                          updateNodeConfig(selectedNode.id, option.id, parseInt(e.target.value) || 0)
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        min="0"
+                      />
+                    )}
+
+                    {option.type === 'select' && option.options && (
+                      <select
+                        value={selectedNode.data.config[option.id]}
+                        onChange={(e) => updateNodeConfig(selectedNode.id, option.id, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      >
+                        {option.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {option.type === 'toggle' && (
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedNode.data.config[option.id]}
+                          onChange={(e) =>
+                            updateNodeConfig(selectedNode.id, option.id, e.target.checked)
+                          }
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-600">Enabled</span>
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Calculated Cost */}
+            <div className="mt-6 p-3 bg-primary-50 rounded border border-primary-200">
+              <p className="text-sm text-gray-600">Total Cost</p>
+              <p className="text-xl font-bold text-primary-600">
+                ${calculateServiceCost(selectedNode.data.service, selectedNode.data.config).toFixed(2)}
+                <span className="text-sm font-normal text-gray-500">/month</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
