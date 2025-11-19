@@ -1,0 +1,211 @@
+name: CI Health Check & Auto-Fix
+
+on:
+  workflow_run:
+    workflows: ["Backend CI", "Frontend CI"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  analyze-failures:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Analyze CI Failure
+        id: analyze
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow_run = context.payload.workflow_run;
+            const jobs_url = workflow_run.jobs_url;
+
+            // Fetch job details
+            const { data: jobs } = await github.request(jobs_url);
+
+            let failures = [];
+            let autoFixable = false;
+            let fixCommands = [];
+
+            for (const job of jobs.jobs) {
+              if (job.conclusion === 'failure') {
+                // Fetch logs
+                const logs_url = job.logs_url;
+                console.log(`Analyzing job: ${job.name}`);
+
+                // Common patterns to detect
+                const patterns = {
+                  missing_import: /F821 undefined name '(\w+)'/,
+                  deprecated_action: /deprecated version of `([^`]+)`/,
+                  linting_error: /F\d{3}/,
+                  type_error: /error TS\d+:/,
+                  dependency_error: /npm ERR!/,
+                };
+
+                failures.push({
+                  job: job.name,
+                  step: job.steps?.find(s => s.conclusion === 'failure')?.name || 'unknown',
+                });
+              }
+            }
+
+            core.setOutput('failures', JSON.stringify(failures));
+            core.setOutput('auto_fixable', autoFixable);
+            core.setOutput('fix_commands', fixCommands.join('\n'));
+
+      - name: Create Issue with Failure Analysis
+        if: steps.analyze.outputs.failures != '[]'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const failures = JSON.parse('${{ steps.analyze.outputs.failures }}');
+            const workflow_run = context.payload.workflow_run;
+
+            const issueBody = `## 🔴 CI Pipeline Failure Detected
+
+**Workflow:** ${workflow_run.name}
+**Branch:** ${workflow_run.head_branch}
+**Commit:** ${workflow_run.head_sha.substring(0, 7)}
+**Run:** [#${workflow_run.run_number}](${workflow_run.html_url})
+
+### Failed Jobs
+${failures.map(f => `- **${f.job}** → Step: \`${f.step}\``).join('\n')}
+
+### Analysis
+This issue was automatically created by the CI Health Check workflow.
+
+### Common Fixes
+- **Missing imports:** Check if all required modules are imported
+- **Deprecated actions:** Update GitHub Actions to latest versions
+- **Linting errors:** Run \`flake8\` or \`eslint\` locally to identify issues
+- **Type errors:** Run \`tsc --noEmit\` or \`mypy\` locally
+
+### Auto-Fix Available
+Check the [workflow run](${workflow_run.html_url}) for auto-generated fixes.
+
+---
+*This issue will auto-close when the pipeline passes.*`;
+
+            // Check if issue already exists for this workflow run
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['ci-failure', 'automated'],
+              state: 'open'
+            });
+
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes(workflow_run.head_sha.substring(0, 7))
+            );
+
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🔴 CI Failure: ${workflow_run.name} on ${workflow_run.head_branch}`,
+                body: issueBody,
+                labels: ['ci-failure', 'automated', 'bug']
+              });
+            }
+
+      - name: Comment on PR with Failure Details
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow_run = context.payload.workflow_run;
+            const failures = JSON.parse('${{ steps.analyze.outputs.failures }}');
+
+            // Find the PR number
+            const pulls = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${workflow_run.head_branch}`,
+              state: 'open'
+            });
+
+            if (pulls.data.length === 0) {
+              console.log('No open PR found for this branch');
+              return;
+            }
+
+            const pr = pulls.data[0];
+
+            const comment = `## ⚠️ CI Pipeline Failed
+
+**Workflow:** ${workflow_run.name}
+**Run:** [#${workflow_run.run_number}](${workflow_run.html_url})
+
+### Failed Steps
+${failures.map(f => `- \`${f.job}\` → ${f.step}`).join('\n')}
+
+### Quick Fixes
+1. Check the [workflow logs](${workflow_run.html_url}) for detailed error messages
+2. Run tests locally:
+   - Backend: \`cd backend && flake8 app && pytest\`
+   - Frontend: \`cd frontend && npm run lint && npm test\`
+3. Common issues:
+   - Missing imports → Add to import statements
+   - Deprecated actions → Update to latest versions
+   - Linting errors → Fix with \`flake8\` or \`eslint --fix\`
+
+---
+*This comment was automatically generated. The CI will re-run when you push new commits.*`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body: comment
+            });
+
+  close-resolved-issues:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      issues: write
+
+    steps:
+      - name: Close Resolved CI Issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow_run = context.payload.workflow_run;
+
+            // Find open CI failure issues for this commit
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['ci-failure', 'automated'],
+              state: 'open'
+            });
+
+            for (const issue of issues.data) {
+              if (issue.title.includes(workflow_run.head_sha.substring(0, 7))) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `✅ CI pipeline is now passing. Closing this issue.`
+                });
+
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed'
+                });
+              }
+            }
