@@ -1,0 +1,224 @@
+name: CI Auto-Fix Bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to fix'
+        required: true
+        default: 'main'
+  schedule:
+    # Run daily to catch and fix common issues
+    - cron: '0 2 * * *'
+
+jobs:
+  auto-fix-common-issues:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_branch || 'main' }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Python tools
+        run: |
+          pip install flake8 autopep8 isort black
+
+      - name: Auto-fix Python imports and formatting
+        id: python_fixes
+        run: |
+          cd backend
+
+          # Auto-fix import sorting
+          isort app --profile black || true
+
+          # Auto-fix formatting
+          black app --line-length 127 || true
+
+          # Auto-fix simple PEP8 issues
+          autopep8 --in-place --aggressive --aggressive --recursive app || true
+
+          # Check if changes were made
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "python_fixed=true" >> $GITHUB_OUTPUT
+            git diff --stat
+          else
+            echo "python_fixed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-fix deprecated GitHub Actions
+        id: actions_fixes
+        run: |
+          # Update deprecated actions to latest versions
+          find .github/workflows -name "*.yml" -type f -exec sed -i.bak \
+            -e 's/actions\/upload-artifact@v3/actions\/upload-artifact@v4/g' \
+            -e 's/actions\/download-artifact@v3/actions\/download-artifact@v4/g' \
+            -e 's/actions\/checkout@v3/actions\/checkout@v4/g' \
+            -e 's/actions\/setup-node@v3/actions\/setup-node@v4/g' \
+            -e 's/actions\/setup-python@v4/actions\/setup-python@v5/g' \
+            {} \;
+
+          # Remove backup files
+          find .github/workflows -name "*.bak" -delete
+
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "actions_fixed=true" >> $GITHUB_OUTPUT
+            git diff --stat
+          else
+            echo "actions_fixed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-fix frontend linting
+        id: frontend_fixes
+        run: |
+          cd frontend
+          npm ci || exit 0
+
+          # Auto-fix ESLint issues
+          npm run lint -- --fix || true
+
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "frontend_fixed=true" >> $GITHUB_OUTPUT
+            git diff --stat
+          else
+            echo "frontend_fixed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update dependencies to fix vulnerabilities
+        id: dependency_fixes
+        run: |
+          cd frontend
+
+          # Run npm audit fix
+          npm audit fix || true
+
+          # Check for high severity issues
+          if npm audit --audit-level=high; then
+            echo "No high severity vulnerabilities"
+            echo "deps_fixed=false" >> $GITHUB_OUTPUT
+          else
+            echo "deps_fixed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Auto-Fix PR
+        if: |
+          steps.python_fixes.outputs.python_fixed == 'true' ||
+          steps.actions_fixes.outputs.actions_fixed == 'true' ||
+          steps.frontend_fixes.outputs.frontend_fixed == 'true' ||
+          steps.dependency_fixes.outputs.deps_fixed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = '${{ github.event.inputs.target_branch || 'main' }}';
+            const newBranch = `auto-fix/ci-improvements-${Date.now()}`;
+
+            // Create new branch
+            await exec.exec('git', ['config', 'user.name', 'github-actions[bot]']);
+            await exec.exec('git', ['config', 'user.email', 'github-actions[bot]@users.noreply.github.com']);
+            await exec.exec('git', ['checkout', '-b', newBranch]);
+
+            // Commit changes
+            await exec.exec('git', ['add', '.']);
+
+            const fixes = [];
+            if ('${{ steps.python_fixes.outputs.python_fixed }}' === 'true') fixes.push('Python formatting and imports');
+            if ('${{ steps.actions_fixes.outputs.actions_fixed }}' === 'true') fixes.push('GitHub Actions updates');
+            if ('${{ steps.frontend_fixes.outputs.frontend_fixed }}' === 'true') fixes.push('Frontend linting');
+            if ('${{ steps.dependency_fixes.outputs.deps_fixed }}' === 'true') fixes.push('Dependency security');
+
+            const commitMessage = `🤖 Auto-fix CI issues: ${fixes.join(', ')}
+
+Automated fixes applied:
+${fixes.map(f => `- ${f}`).join('\n')}
+
+This PR was automatically created by the CI Auto-Fix Bot.
+
+Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>`;
+
+            await exec.exec('git', ['commit', '-m', commitMessage]);
+            await exec.exec('git', ['push', 'origin', newBranch]);
+
+            // Create PR
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 Auto-fix CI issues (${fixes.join(', ')})`,
+              head: newBranch,
+              base: branch,
+              body: `## Automated CI Improvements
+
+This PR contains automatic fixes for common CI issues.
+
+### Changes Applied
+${fixes.map(f => `- ✅ ${f}`).join('\n')}
+
+### Details
+${
+  '${{ steps.python_fixes.outputs.python_fixed }}' === 'true' ?
+  `
+**Python Improvements:**
+- Sorted imports with isort
+- Applied black formatting
+- Fixed PEP8 issues with autopep8
+` : ''
+}${
+  '${{ steps.actions_fixes.outputs.actions_fixed }}' === 'true' ?
+  `
+**GitHub Actions Updates:**
+- Updated deprecated actions to latest versions
+- upload-artifact: v3 → v4
+- download-artifact: v3 → v4
+- checkout: v3 → v4
+- setup-node: v3 → v4
+- setup-python: v4 → v5
+` : ''
+}${
+  '${{ steps.frontend_fixes.outputs.frontend_fixed }}' === 'true' ?
+  `
+**Frontend Linting:**
+- Applied ESLint auto-fixes
+- Cleaned up code formatting
+` : ''
+}${
+  '${{ steps.dependency_fixes.outputs.deps_fixed }}' === 'true' ?
+  `
+**Dependency Updates:**
+- Fixed npm security vulnerabilities
+- Updated dependencies to safe versions
+` : ''
+}
+
+### Testing
+Please review the changes and ensure all CI pipelines pass before merging.
+
+---
+🤖 This PR was automatically generated by the [CI Auto-Fix Bot](.github/workflows/ci-auto-fix.yml)
+`
+            });
+
+            console.log(`Created PR #${pr.number}: ${pr.html_url}`);
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Auto-Fix Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Python fixes: ${{ steps.python_fixes.outputs.python_fixed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Actions fixes: ${{ steps.actions_fixes.outputs.actions_fixed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend fixes: ${{ steps.frontend_fixes.outputs.frontend_fixed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependency fixes: ${{ steps.dependency_fixes.outputs.deps_fixed }}" >> $GITHUB_STEP_SUMMARY

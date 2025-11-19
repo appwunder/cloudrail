@@ -2256,4 +2256,311 @@ Ready for production deployment or Multi-Cloud Support implementation!
 
 ---
 
-Last Updated: November 15, 2025
+## Phase 12: Unit Economics Dashboard (Planned) 📉
+**Problem:** Organizations don't know if bill increases are due to growth or inefficiency
+**Solution:** Correlate cloud costs with business metrics for true cost analysis
+
+### Features to Implement
+- [ ] Business Metrics API
+  - [ ] Ingest business metrics via REST API or manual entry
+  - [ ] Support custom metric types (DAU, MAU, API requests, transactions, revenue, etc.)
+  - [ ] Time-series data storage for metrics
+  - [ ] Metric validation and normalization
+  - [ ] Batch metric import (CSV upload)
+
+- [ ] Cost Correlation Engine
+  - [ ] Calculate cost per business metric (e.g., Cost per DAU, Cost per 1k API requests)
+  - [ ] Historical trending of unit economics
+  - [ ] Automatic correlation detection between costs and metrics
+  - [ ] Anomaly detection for unit cost spikes
+  - [ ] Efficiency score calculation
+
+- [ ] Unit Economics Dashboard
+  - [ ] Interactive charts showing cost-per-metric trends
+  - [ ] Comparison views (this month vs last month)
+  - [ ] Service-level unit economics breakdown
+  - [ ] Growth vs efficiency analysis
+  - [ ] Unit cost targets and alerts
+  - [ ] Export unit economics reports
+
+- [ ] Database Schema
+  - [ ] `business_metrics` table (metric_type, value, date, tenant_id)
+  - [ ] `unit_economics` table (calculated cost-per-metric snapshots)
+  - [ ] Indexes for efficient time-series queries
+
+- [ ] API Endpoints
+  - [ ] `POST /api/v1/metrics` - Ingest business metrics
+  - [ ] `GET /api/v1/metrics` - List metrics with filtering
+  - [ ] `GET /api/v1/unit-economics` - Get unit economics data
+  - [ ] `POST /api/v1/metrics/batch` - Batch import metrics
+  - [ ] `GET /api/v1/unit-economics/trends` - Trending analysis
+
+### Success Metrics
+- Ability to answer "Did our costs go up because we grew or because we were inefficient?"
+- Track cost per customer, cost per transaction, cost per API call
+- Identify which services contribute most to unit costs
+
+---
+
+## Phase 13: Waste Hunter with One-Click Fix (Planned) 🧹
+**Problem:** Zombie resources waste 30%+ of cloud spend, but users are afraid to delete them
+**Solution:** Automated detection with safe "Scream Test" mode before permanent deletion
+
+### Features to Implement
+- [ ] Zombie Resource Detection
+  - [ ] Unattached EBS volumes (no EC2 association)
+  - [ ] Old EBS snapshots (>180 days, >365 days configurable)
+  - [ ] Idle RDS instances (low connection count)
+  - [ ] Unused Elastic IPs (not attached)
+  - [ ] Old AMIs (>90 days, not in use)
+  - [ ] Idle NAT Gateways (low traffic)
+  - [ ] Unused Elastic Load Balancers (no targets)
+  - [ ] Orphaned CloudWatch Logs (>90 days retention)
+
+- [ ] Scream Test Mode
+  - [ ] Stop resources for 7-day trial period
+  - [ ] Monitor for any complaints or issues
+  - [ ] Automatic rollback if needed
+  - [ ] Notification system for affected teams
+  - [ ] Safe-to-delete status tracking
+
+- [ ] One-Click Remediation
+  - [ ] Snapshot & delete workflow for volumes
+  - [ ] Archive logs before deletion
+  - [ ] Batch deletion support
+  - [ ] Undo functionality (restore from snapshot)
+  - [ ] Cost savings calculation in real-time
+  - [ ] Approval workflow for high-value resources
+
+- [ ] Waste Hunter Dashboard
+  - [ ] Total waste detected (dollar amount)
+  - [ ] Resource category breakdown
+  - [ ] Age distribution of zombie resources
+  - [ ] Safe-to-delete vs needs-review categorization
+  - [ ] Scream test status tracking
+  - [ ] One-click action buttons
+
+- [ ] Database Schema
+  - [ ] `zombie_resources` table (resource_id, type, age, cost, status, scream_test_start)
+  - [ ] `remediation_actions` table (action_id, resource_id, action_type, status, created_by)
+
+- [ ] API Endpoints
+  - [ ] `GET /api/v1/waste-hunter/scan` - Scan for zombie resources
+  - [ ] `GET /api/v1/waste-hunter/resources` - List detected waste
+  - [ ] `POST /api/v1/waste-hunter/scream-test/{resource_id}` - Start scream test
+  - [ ] `POST /api/v1/waste-hunter/remediate/{resource_id}` - Delete resource
+  - [ ] `POST /api/v1/waste-hunter/batch-remediate` - Batch delete
+
+### Success Metrics
+- Detect and eliminate 20-30% of wasted cloud spend
+- Zero accidental deletions of needed resources
+- Average time from detection to remediation <24 hours
+
+---
+
+## Phase 14: Smart Anomaly Detection (Planned) 🤖
+**Problem:** Cost spikes are only discovered when the bill arrives
+**Solution:** ML-driven real-time anomaly detection with instant alerts
+
+### Features to Implement
+- [ ] ML Model Development
+  - [ ] Historical pattern learning (7-day, 30-day, 90-day baselines)
+  - [ ] Seasonal pattern detection (weekday/weekend, monthly cycles)
+  - [ ] Service-level anomaly models
+  - [ ] Account-level anomaly models
+  - [ ] Resource-level anomaly models
+  - [ ] Configurable sensitivity thresholds
+
+- [ ] Anomaly Detection Engine
+  - [ ] Real-time cost stream processing
+  - [ ] Deviation detection (>20% from expected)
+  - [ ] Multi-dimensional analysis (time, service, region)
+  - [ ] Correlation analysis (which resource caused spike)
+  - [ ] Confidence scoring for anomalies
+  - [ ] False positive reduction
+
+- [ ] Alert System
+  - [ ] Instant notifications via email/Slack/webhook
+  - [ ] Alert severity levels (info, warning, critical)
+  - [ ] Anomaly explanation ("Lambda invocations up 300%")
+  - [ ] Root cause analysis with resource details
+  - [ ] Historical context in alerts
+  - [ ] Alert grouping to prevent spam
+
+- [ ] Anomaly Dashboard
+  - [ ] Real-time anomaly feed
+  - [ ] Anomaly timeline visualization
+  - [ ] Cost spike attribution charts
+  - [ ] Investigation tools (drill-down by service/resource)
+  - [ ] Acknowledge/dismiss anomalies
+  - [ ] Feedback loop for ML improvement
+
+- [ ] Database Schema
+  - [ ] `cost_baselines` table (service, expected_cost, date)
+  - [ ] `anomalies` table (anomaly_id, service, deviation_pct, actual_cost, expected_cost, confidence)
+  - [ ] `anomaly_alerts` table (alert_id, anomaly_id, severity, acknowledged)
+
+- [ ] API Endpoints
+  - [ ] `GET /api/v1/anomalies` - List detected anomalies
+  - [ ] `GET /api/v1/anomalies/{id}` - Get anomaly details
+  - [ ] `POST /api/v1/anomalies/{id}/acknowledge` - Acknowledge anomaly
+  - [ ] `GET /api/v1/anomalies/trends` - Anomaly trends over time
+  - [ ] `POST /api/v1/anomalies/feedback` - User feedback for ML
+
+### Success Metrics
+- Detect cost anomalies within 1 hour of occurrence
+- 90%+ accuracy (low false positive rate)
+- Average cost spike detection before 80% of users would notice manually
+
+---
+
+## Phase 15: AI/ML Cost Lens (Planned) 🧠
+**Problem:** GPU and AI workload costs are exploding and unpredictable
+**Solution:** Specialized tracking and optimization for AI/ML infrastructure
+
+### Features to Implement
+- [ ] GPU Instance Tracking
+  - [ ] Specialized support for EC2 GPU instances (p3, p4, g4, g5)
+  - [ ] SageMaker training job cost tracking
+  - [ ] SageMaker inference endpoint costs
+  - [ ] GPU utilization metrics (via CloudWatch)
+  - [ ] Underutilized GPU detection (<50% utilization)
+  - [ ] Spot instance recommendations for training
+
+- [ ] Training vs Inference Breakdown
+  - [ ] Automatic categorization of AI workloads
+  - [ ] Cost split: model training vs model inference
+  - [ ] Cost per model trained
+  - [ ] Cost per inference request
+  - [ ] Training efficiency metrics (cost per epoch)
+  - [ ] Inference efficiency (cost per 1k predictions)
+
+- [ ] AI Cost Optimization
+  - [ ] Right-sizing recommendations for ML instances
+  - [ ] Spot instance opportunities for training jobs
+  - [ ] Inference endpoint auto-scaling recommendations
+  - [ ] Model compression savings estimates
+  - [ ] Multi-model endpoint consolidation
+  - [ ] Reserved capacity analysis for SageMaker
+
+- [ ] AI/ML Dashboard
+  - [ ] Total AI/ML spend breakdown
+  - [ ] Training vs inference cost pie chart
+  - [ ] GPU utilization heatmap
+  - [ ] Cost per model metrics
+  - [ ] Top expensive models/experiments
+  - [ ] Efficiency trends over time
+
+- [ ] Database Schema
+  - [ ] `ml_workloads` table (workload_id, type, model_name, cost, duration, gpu_hours)
+  - [ ] `gpu_utilization` table (instance_id, utilization_pct, timestamp)
+
+- [ ] API Endpoints
+  - [ ] `GET /api/v1/ml-costs/summary` - AI/ML cost summary
+  - [ ] `GET /api/v1/ml-costs/training` - Training costs breakdown
+  - [ ] `GET /api/v1/ml-costs/inference` - Inference costs breakdown
+  - [ ] `GET /api/v1/ml-costs/gpu-utilization` - GPU utilization metrics
+  - [ ] `GET /api/v1/ml-costs/recommendations` - AI-specific recommendations
+
+### Success Metrics
+- Track 100% of AI/ML-related costs separately
+- Identify underutilized GPU instances saving 20-40% on compute
+- Optimize training vs inference spend distribution
+
+---
+
+## Phase 16: ChatOps Integration (Planned) 💬
+**Problem:** Engineers don't check cost dashboards regularly
+**Solution:** Bring cost insights to where teams already work (Slack/Teams)
+
+### Features to Implement
+- [ ] Slack Integration
+  - [ ] Slack App installation and OAuth
+  - [ ] Interactive Slack bot with slash commands
+  - [ ] `/cloudcostly costs [timeframe]` - Get current costs
+  - [ ] `/cloudcostly budget [name]` - Check budget status
+  - [ ] `/cloudcostly recommendations` - Get top recommendations
+  - [ ] `/cloudcostly anomalies` - Recent cost anomalies
+  - [ ] Message threading for context
+  - [ ] Interactive buttons (Acknowledge, Fix, Ignore)
+
+- [ ] Microsoft Teams Integration
+  - [ ] Teams app manifest and installation
+  - [ ] Teams bot with commands
+  - [ ] Adaptive cards for rich formatting
+  - [ ] Interactive actions in Teams
+  - [ ] Channel mentions for alerts
+
+- [ ] Cost Digests
+  - [ ] Weekly cost summary sent to channels
+  - [ ] Monthly cost report with trends
+  - [ ] Team-specific cost breakdowns
+  - [ ] Service-level cost attribution
+  - [ ] Savings achieved summary
+  - [ ] Configurable digest schedule
+
+- [ ] Interactive Alerts
+  - [ ] Budget threshold alerts with action buttons
+  - [ ] Anomaly alerts with investigation links
+  - [ ] Recommendation notifications with "Apply" button
+  - [ ] Waste Hunter findings with "Review" action
+  - [ ] Alert acknowledgment tracking
+  - [ ] Alert escalation for critical issues
+
+- [ ] ChatOps Dashboard (Config)
+  - [ ] Connect Slack workspace
+  - [ ] Connect Teams tenant
+  - [ ] Configure notification channels
+  - [ ] Set digest schedules
+  - [ ] Alert routing rules
+  - [ ] Test webhook connectivity
+
+- [ ] Database Schema
+  - [ ] `chat_integrations` table (tenant_id, platform, channel_id, webhook_url, settings)
+  - [ ] `chat_notifications` table (notification_id, platform, channel_id, message, sent_at, acknowledged)
+
+- [ ] API Endpoints
+  - [ ] `POST /api/v1/integrations/slack/install` - Install Slack app
+  - [ ] `POST /api/v1/integrations/teams/install` - Install Teams app
+  - [ ] `GET /api/v1/integrations/channels` - List configured channels
+  - [ ] `POST /api/v1/integrations/test` - Test integration
+  - [ ] `POST /api/v1/integrations/slack/webhook` - Slack event webhook
+  - [ ] `POST /api/v1/integrations/teams/webhook` - Teams event webhook
+
+### Success Metrics
+- 80%+ of budget alerts acknowledged within 1 hour
+- 50%+ increase in recommendation implementation rate
+- 90%+ team member engagement with cost data via chat
+
+---
+
+## Market Research-Driven Features Summary
+
+These 5 new phases (12-16) address key market pain points identified in MARKET_RESEARCH.md:
+
+**Competitive Differentiation:**
+1. **Unit Economics Dashboard** - Unique value proposition that competitors lack
+2. **Waste Hunter** - Automated remediation beyond basic recommendations
+3. **Smart Anomaly Detection** - Proactive vs reactive cost management
+4. **AI/ML Cost Lens** - Specialized for fastest-growing cloud workload type
+5. **ChatOps Integration** - Meet engineers where they work
+
+**Market Impact:**
+- Addresses "Cloud Waste" pain point (30%+ wasted spend)
+- Solves "Lack of Unit Economics" understanding
+- Tackles "AI/ML Cost Shock" with specialized tracking
+- Eliminates "Alert Fatigue" with smart, actionable notifications
+- Bridges the gap between native tools (AWS Cost Explorer) and advanced competitors
+
+**Estimated Development Time:**
+- Phase 12 (Unit Economics): 3-4 weeks
+- Phase 13 (Waste Hunter): 4-5 weeks
+- Phase 14 (Anomaly Detection): 5-6 weeks (ML model development)
+- Phase 15 (AI/ML Lens): 3-4 weeks
+- Phase 16 (ChatOps): 2-3 weeks
+
+**Total:** ~17-22 weeks for all market research-driven features
+
+---
+
+Last Updated: January 19, 2025
