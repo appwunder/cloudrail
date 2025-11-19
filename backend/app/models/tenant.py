@@ -17,6 +17,11 @@ class Tenant(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Stripe / Subscription
+    stripe_customer_id = Column(String, unique=True, nullable=True)
+    subscription_status = Column(String, default="free")  # free, active, past_due, canceled
+    subscription_plan = Column(String, default="free")    # free, pro, business, enterprise
+
     # Relationships
     users = relationship("User", back_populates="tenant")
     aws_accounts = relationship("AWSAccount", back_populates="tenant")

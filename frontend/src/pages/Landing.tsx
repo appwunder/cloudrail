@@ -121,6 +121,12 @@ export default function Landing() {
             </div>
             <div className="flex items-center gap-4">
               <Link
+                to="/pricing"
+                className="text-sm font-medium text-gray-700 hover:text-primary-600"
+              >
+                Pricing
+              </Link>
+              <Link
                 to="/login"
                 className="text-sm font-medium text-gray-700 hover:text-primary-600"
               >

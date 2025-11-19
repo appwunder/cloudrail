@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/cloudcostly"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5433/cloudcostly"
 
     # AWS
     AWS_REGION: str = "us-east-1"
@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@cloudcostly.com"
     SMTP_TLS: bool = True
+
+    # Stripe
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
 
     # Environment
     ENVIRONMENT: str = "development"

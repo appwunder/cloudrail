@@ -10,6 +10,7 @@ import CostExplorer from './pages/CostExplorer'
 import Recommendations from './pages/Recommendations'
 import ArchitectureDesigner from './pages/ArchitectureDesigner'
 import Budgets from './pages/Budgets'
+import Pricing from './pages/Pricing'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/pricing" element={<Pricing />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/aws-accounts" element={<AWSAccounts />} />

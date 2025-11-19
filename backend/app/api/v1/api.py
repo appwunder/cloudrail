@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, costs, aws_accounts, cloud_accounts, architectures, budgets
+from app.api.v1.endpoints import auth, costs, aws_accounts, cloud_accounts, architectures, budgets, billing
 
 api_router = APIRouter()
 
@@ -9,3 +9,4 @@ api_router.include_router(cloud_accounts.router, prefix="/cloud-accounts", tags=
 api_router.include_router(costs.router, prefix="/costs", tags=["costs"])
 api_router.include_router(architectures.router, prefix="/architectures", tags=["architectures"])
 api_router.include_router(budgets.router, prefix="/budgets", tags=["budgets"])
+api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
