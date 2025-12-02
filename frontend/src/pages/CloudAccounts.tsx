@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Cloud, Trash2, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { api } from '@/lib/api'
+import { cloudAccountsApi } from '@/lib/api'
 
 // Cloud Provider types
 type CloudProvider = 'aws' | 'gcp' | 'azure' | 'alibaba'
@@ -82,7 +82,7 @@ export default function CloudAccounts() {
   const { data: accountsData, isLoading } = useQuery<CloudAccountsResponse>({
     queryKey: ['cloud-accounts'],
     queryFn: async () => {
-      const response = await api.get('/api/v1/cloud-accounts/')
+      const response = await cloudAccountsApi.list()
       return response.data
     }
   })
@@ -90,7 +90,7 @@ export default function CloudAccounts() {
   // Create account mutation
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/api/v1/cloud-accounts/', data)
+      const response = await cloudAccountsApi.create(data)
       return response.data
     },
     onSuccess: () => {
@@ -106,7 +106,7 @@ export default function CloudAccounts() {
   // Delete account mutation
   const deleteMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      await api.delete(`/api/v1/cloud-accounts/${accountId}`)
+      await cloudAccountsApi.delete(accountId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cloud-accounts'] })
@@ -116,7 +116,7 @@ export default function CloudAccounts() {
   // Sync account mutation
   const syncMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      const response = await api.post(`/api/v1/cloud-accounts/${accountId}/sync`, { force: false })
+      const response = await cloudAccountsApi.sync(accountId)
       return response.data
     },
     onSuccess: () => {

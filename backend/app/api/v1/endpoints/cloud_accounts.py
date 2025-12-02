@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import uuid
+import logging
 
 from app.db.base import get_db
 from app.core.deps import get_current_user, get_current_tenant
 from app.models.user import User
 from app.models.tenant import Tenant
 from app.models.cloud_account import CloudAccount, CloudProvider
+from app.models.cost_data import MultiCloudCostData
 from app.schemas.cloud_account import (
     CloudAccountCreate,
     CloudAccountUpdate,
@@ -17,6 +19,9 @@ from app.schemas.cloud_account import (
     CloudAccountSyncRequest,
     CloudAccountSyncResponse
 )
+from app.services.cloud_providers import CloudProviderServiceFactory
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -182,22 +187,115 @@ async def sync_cloud_account(
                 last_sync_at=account.last_sync_at
             )
 
-    # Update sync status
+    # Update sync status to syncing
     account.sync_status = "syncing"
     account.last_sync_at = datetime.utcnow()
     account.sync_error = None
     db.commit()
 
-    # TODO: Trigger background job to sync cost data based on provider
-    # This will be implemented when we add the cloud provider service classes
+    try:
+        # Create cloud provider service
+        logger.info(f"Creating {account.provider.value} service for account {account.account_id}")
+        service = CloudProviderServiceFactory.create_service(
+            provider=account.provider,
+            credentials=account.credentials,
+            account_id=account.account_id,
+            region=account.region
+        )
 
-    return CloudAccountSyncResponse(
-        account_id=account.id,
-        provider=account.provider,
-        sync_status="syncing",
-        message=f"Sync triggered for {account.provider.value.upper()} account: {account.account_name or account.account_id}",
-        last_sync_at=account.last_sync_at
-    )
+        # Fetch costs for the last 30 days
+        end_date = date.today()
+        start_date = end_date - timedelta(days=30)
+
+        logger.info(f"Fetching costs from {start_date} to {end_date}")
+
+        with service:
+            cost_records = service.fetch_costs(
+                start_date=start_date,
+                end_date=end_date,
+                granularity="daily"
+            )
+
+        # Store cost records in database
+        logger.info(f"Storing {len(cost_records)} cost records")
+        stored_count = 0
+
+        for record in cost_records:
+            # Check if record already exists (idempotency)
+            existing = db.query(MultiCloudCostData).filter(
+                MultiCloudCostData.cloud_account_id == account.id,
+                MultiCloudCostData.date == record.date,
+                MultiCloudCostData.service_name == record.service_name,
+                MultiCloudCostData.region == record.region
+            ).first()
+
+            if existing:
+                # Update existing record
+                existing.cost = record.cost
+                existing.currency = record.currency
+                existing.usage_quantity = record.usage_quantity
+                existing.usage_unit = record.usage_unit
+                existing.tags = record.tags
+                existing.provider_metadata = record.provider_metadata
+                existing.updated_at = datetime.utcnow()
+            else:
+                # Create new record
+                cost_data = MultiCloudCostData(
+                    id=uuid.uuid4(),
+                    tenant_id=current_tenant.id,
+                    cloud_account_id=account.id,
+                    provider=account.provider,
+                    date=record.date,
+                    service_name=record.service_name,
+                    service_category=record.service_category,
+                    resource_id=record.resource_id,
+                    resource_name=record.resource_name,
+                    region=record.region,
+                    cost=record.cost,
+                    currency=record.currency,
+                    usage_quantity=record.usage_quantity,
+                    usage_unit=record.usage_unit,
+                    tags=record.tags,
+                    provider_metadata=record.provider_metadata
+                )
+                db.add(cost_data)
+                stored_count += 1
+
+        db.commit()
+
+        # Update sync status to success
+        account.sync_status = "success"
+        account.last_sync_at = datetime.utcnow()
+        account.sync_error = None
+        db.commit()
+
+        logger.info(f"Successfully synced {stored_count} new cost records for {account.provider.value} account")
+
+        return CloudAccountSyncResponse(
+            account_id=account.id,
+            provider=account.provider,
+            sync_status="success",
+            message=f"Successfully synced {stored_count} cost records from {account.provider.value.upper()}",
+            last_sync_at=account.last_sync_at
+        )
+
+    except Exception as e:
+        # Update sync status to error
+        error_message = str(e)
+        logger.error(f"Sync failed for {account.provider.value} account: {error_message}")
+
+        account.sync_status = "error"
+        account.sync_error = error_message
+        account.last_sync_at = datetime.utcnow()
+        db.commit()
+
+        return CloudAccountSyncResponse(
+            account_id=account.id,
+            provider=account.provider,
+            sync_status="error",
+            message=f"Sync failed: {error_message}",
+            last_sync_at=account.last_sync_at
+        )
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-in-production-use-openssl-rand-hex-32"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES_REMEMBER_ME: int = 10080  # 7 days
 
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5433/cloudcostly"

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { AlertCircle } from 'lucide-react'
@@ -7,16 +7,24 @@ import CloudRailLogo from '@/components/CloudRailLogo'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
-  const { login, isLoading } = useAuthStore()
+  const { login, isLoading, isAuthenticated } = useAuthStore()
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard')
+    }
+  }, [isAuthenticated, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     try {
-      await login(email, password)
+      await login(email, password, rememberMe)
       navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid email or password')
@@ -75,6 +83,20 @@ export default function Login() {
                 placeholder="••••••••"
               />
             </div>
+          </div>
+
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              name="remember-me"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+            />
+            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 cursor-pointer">
+              Stay signed in
+            </label>
           </div>
 
           <div>

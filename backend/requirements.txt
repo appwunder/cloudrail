@@ -21,3 +21,11 @@ flake8==6.1.0
 mypy==1.7.1
 reportlab==4.0.7
 stripe==7.5.0
+
+# Multi-Cloud Provider SDKs
+google-cloud-billing==1.12.0
+google-auth==2.25.2
+azure-mgmt-costmanagement==4.0.1
+azure-identity==1.15.0
+aliyun-python-sdk-core==2.14.0
+aliyun-python-sdk-bssopenapi==2.0.3
