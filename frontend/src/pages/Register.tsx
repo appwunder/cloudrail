@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 import { AlertCircle, CheckCircle } from 'lucide-react'
 import CloudRailLogo from '@/components/CloudRailLogo'
 
@@ -15,6 +16,14 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const navigate = useNavigate()
+  const { isAuthenticated } = useAuthStore()
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard')
+    }
+  }, [isAuthenticated, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
